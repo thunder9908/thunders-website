@@ -1208,48 +1208,78 @@ function goHome(){
 
 
 
-// ── RENDER SECTION ────────────────────────────────────────
-function renderSection(sec){
+// ── RENDER SECTION (LIVE API) ─────────────────────────────
+async function renderSection(sec){
   const s = state[sec];
-  const all = PRODUCTS[sec];
-  const cats = ['all', ...new Set(all.map(p=>p.cat))];
 
   // filters
   const fEl = document.getElementById(sec+'-filters');
   fEl.innerHTML = '<span class="filter-label-txt">Filter:</span>' +
-    cats.map(c => `<button class="fchip${s.cat===c?' active':''}" onclick="setFilter('${sec}','${c}')">${c==='all'?'All':c.charAt(0).toUpperCase()+c.slice(1)}</button>`).join('');
-
-  // filtered products
-  const data = s.cat==='all' ? all : all.filter(p=>p.cat===s.cat);
-  const pages = Math.ceil(data.length/PAGE_SIZE);
-  if(s.page>pages) s.page=1;
-  const slice = data.slice((s.page-1)*PAGE_SIZE, s.page*PAGE_SIZE);
+    ['all','sneakers','apparel'].map(ct => `<button class="fchip${s.cat===ct?' active':''}" onclick="setFilter('${sec}','${ct}')">${ct==='all'?'All':ct.charAt(0).toUpperCase()+ct.slice(1)}</button>`).join('');
 
   const grid = document.getElementById(sec+'-grid');
-  if(!slice.length){
-    grid.innerHTML = '<div class="empty-state">No products in this category.</div>';
-    document.getElementById(sec+'-pagination').innerHTML='';
+  const pg   = document.getElementById(sec+'-pagination');
+
+  // Show loading spinner
+  grid.innerHTML = `<div class="empty-state"><div style="font-size:2.5rem;animation:boltBounce 1s infinite">⚡</div><div style="margin-top:16px;font-size:0.6rem;letter-spacing:0.3em;color:var(--muted)">LOADING LIVE DROPS...</div></div>`;
+  pg.innerHTML = '';
+
+  const apiCat = (s.cat === 'all' || !['sneakers','apparel'].includes(s.cat)) ? 'sneakers' : s.cat;
+
+  let products = [], totalPages = 1;
+
+  if (s.cat === 'all') {
+    const [d1, d2] = await Promise.all([
+      fetchProducts(sec, 'sneakers', s.page),
+      fetchProducts(sec, 'apparel',  s.page),
+    ]);
+    products   = [...(d1?.products||[]), ...(d2?.products||[])];
+    totalPages = Math.max(d1?.totalPages||1, d2?.totalPages||1);
+  } else {
+    const liveData = await fetchProducts(sec, apiCat, s.page);
+    if (liveData?.products?.length) {
+      products   = liveData.products;
+      totalPages = liveData.totalPages;
+    }
+  }
+
+  // Fallback to static if API not ready
+  if (!products.length) {
+    const all      = PRODUCTS[sec] || [];
+    const filtered = s.cat === 'all' ? all : all.filter(p => p.cat === s.cat);
+    totalPages     = Math.ceil(filtered.length / PAGE_SIZE) || 1;
+    products       = filtered.slice((s.page-1)*PAGE_SIZE, s.page*PAGE_SIZE);
+  }
+
+  if (!products.length) {
+    grid.innerHTML = '<div class="empty-state">No products found.</div>';
+    pg.innerHTML   = '';
     return;
   }
 
-  grid.innerHTML = slice.map((p,i)=>`
-    <div class="product-card" style="animation-delay:${i*0.05}s" onclick="openModal('${p.id}','${sec}')">
+  // Store for modal access
+  if (!window._liveProducts) window._liveProducts = {};
+  products.forEach(p => { window._liveProducts[p.id] = {...p, section: sec}; });
+
+  grid.innerHTML = products.map((p,i) => `
+    <div class="product-card" style="animation-delay:${i*0.04}s" onclick="openModal('${p.id}','${sec}')">
       <div class="card-img">
-        <img src="${p.img}" alt="${p.name}" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&q=80'">
-        ${p.isnew?'<div class="new-badge">New Drop</div>':''}
+        <img src="${p.img || 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&q=80'}"
+             alt="${p.name}" loading="lazy"
+             onerror="this.src='https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&q=80'">
+        ${p.isnew ? '<div class="new-badge">New Drop</div>' : ''}
       </div>
       <div class="card-body">
         <div class="card-brand">${p.brand}</div>
         <div class="card-name">${p.name}</div>
         <div class="card-price">${fmt(p.price)}</div>
+        ${p.sizes && p.sizes.length ? `<div class="card-sizes">${p.sizes.slice(0,5).map(s=>`<span class="size-chip">${s}</span>`).join('')}${p.sizes.length>5?`<span class="size-chip more">+${p.sizes.length-5}</span>`:''}</div>` : ''}
         <button class="card-cta">Quick View</button>
       </div>
     </div>
   `).join('');
 
-  // pagination
-  const pg = document.getElementById(sec+'-pagination');
-  pg.innerHTML = pages>1 ? Array.from({length:pages},(_,i)=>
+  pg.innerHTML = totalPages > 1 ? Array.from({length: Math.min(totalPages,10)}, (_,i) =>
     `<button class="pg-btn${i+1===s.page?' active':''}" onclick="goPage('${sec}',${i+1})">${i+1}</button>`
   ).join('') : '';
 }
@@ -1299,7 +1329,7 @@ function goToSection(sec, cat){
   window.scrollTo(0,0);
   if(cat && cat !== 'all') { state[sec].cat = cat; }
   else if(cat === 'all') { state[sec].cat = 'all'; }
-  renderSection(sec);
+  renderSection(sec); // async, runs in background
 }
 function goBack(){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
