@@ -940,6 +940,25 @@
     .cat-select-hero { padding: 40px 20px 28px; }
     .cat-search-wrap, .cat-search-results { max-width: 100%; }
   }
+
+  .card-sizes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+  .size-chip {
+    border: 1px solid var(--border);
+    padding: 2px 7px;
+    font-size: 0.45rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .size-chip.more {
+    color: var(--gold);
+    border-color: var(--gold);
+  }
 </style>
 </head>
 <body>
@@ -1084,7 +1103,7 @@
       <div class="modal-brand-txt" id="mBrand"></div>
       <div class="modal-name-txt" id="mName"></div>
       <div class="modal-price-txt" id="mPrice"></div>
-      <div class="modal-desc-txt" id="mDesc"></div>
+      <div class="modal-desc-txt" id="mDesc" style="overflow-y:auto"></div>
       <button class="modal-add-btn">Add to Cart — Coming Soon</button>
     </div>
   </div>
@@ -1248,14 +1267,17 @@ function goPage(sec, n){
 // ── MODAL ─────────────────────────────────────────────────
 function openModal(id, sec){
   const lp = window._liveProducts && window._liveProducts[id];
-  const sp = PRODUCTS[sec] && PRODUCTS[sec].find(x=>x.id===id);
-  const p = lp || sp;
+  const sp = PRODUCTS[sec] && PRODUCTS[sec].find && PRODUCTS[sec].find(x=>x.id===id);
+  const p  = lp || sp;
   if(!p) return;
   document.getElementById('mImg').src = p.img;
   document.getElementById('mBrand').textContent = p.brand;
   document.getElementById('mName').textContent = p.name;
   document.getElementById('mPrice').textContent = fmt(p.price);
-  document.getElementById('mDesc').textContent = `A premium ${p.cat} from ${p.brand}, handpicked by the Thunders team. 100% authentic. Ships pan-India.`;
+  const sizesHtml = p.sizes && p.sizes.length
+    ? '<div style="margin-top:12px"><div style="font-size:0.48rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Available Sizes</div><div style="display:flex;flex-wrap:wrap;gap:4px">' + p.sizes.map(s=>`<span style="border:1px solid var(--border);padding:4px 10px;font-size:0.5rem;color:var(--off-white)">${s}</span>`).join('') + '</div></div>'
+    : '';
+  document.getElementById('mDesc').innerHTML = `A premium ${p.cat} from ${p.brand}. 100% authentic. Ships pan-India.${sizesHtml}`;
   document.getElementById('modalOverlay').classList.add('open');
   document.body.style.overflow='hidden';
 }
